@@ -1,0 +1,107 @@
+---
+title: "Project"
+author: "Kexin Jin"
+date: "2/18/2020"
+output: rmarkdown::github_document
+---
+
+#### Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+#### Data
+The training data for this project are available here:  
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv  
+
+The test data are available here:  
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv  
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.  
+
+Introduction to the data from its website:"  
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).  
+
+Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. Participants were supervised by an experienced weight lifter to make sure the execution complied to the manner they were supposed to simulate. The exercises were performed by six male participants aged between 20-28 years, with little weight lifting experience. We made sure that all participants could easily simulate the mistakes in a safe and controlled manner by using a relatively light dumbbell (1.25kg).  
+"
+
+#### What you should submit  
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.   
+
+##### Peer Review Portion  
+Your submission for the Peer Review portion should consist of a link to a Github repo with your R markdown and compiled HTML file describing your analysis. Please constrain the text of the writeup to < 2000 words and the number of figures to be less than 5. It will make it easier for the graders if you submit a repo with a gh-pages branch so the HTML page can be viewed online (and you always want to make it easy on graders :-).  
+
+##### Course Project Prediction Quiz Portion  
+Apply your machine learning algorithm to the 20 test cases available in the test data above and submit your predictions in appropriate format to the Course Project Prediction Quiz for automated grading.  
+
+#### Reproducibility  
+Due to security concerns with the exchange of R code, your code will not be run during the evaluation by your classmates. Please be sure that if they download the repo, they will be able to view the compiled HTML version of your analysis.  
+
+### Load the data
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+url<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(url, destfile = "/Volumes/GoogleDrive/My Drive/13Knowledge/DataScience/JhuDS/08Practical Machine Learning/Project/training.csv", method="curl")
+url<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(url, destfile = "/Volumes/GoogleDrive/My Drive/13Knowledge/DataScience/JhuDS/08Practical Machine Learning/Project/testing.csv", method="curl")
+data0<-read.csv(file = "/Volumes/GoogleDrive/My Drive/13Knowledge/DataScience/JhuDS/08Practical Machine Learning/Project/training.csv")
+coursera0<-read.csv(file = "/Volumes/GoogleDrive/My Drive/13Knowledge/DataScience/JhuDS/08Practical Machine Learning/Project/testing.csv")
+dim(data0)
+dim(coursera0)
+summary(data0)
+summary(coursera0)
+```
+These steps show each row of the data is one sample of weight-lifting activity. There were 19622 samples in training dataset, and 20 samples in testing dataset. The goal of this assignment was to use accelerometer information only to predict classe. Some of the accelerometer variables have missing values.
+
+### Pre-process the data
+1. Use accelerometer data only
+```{r}
+names(data0)
+index1<-grep("accel", names(data0))
+data1<-data0[,c(index1, 160)]
+coursera1<-coursera0[,c(index1, 160)]
+summary(data1)
+summary(coursera1)
+```
+
+2. Handle missing data:   
+According to the previous step, in both data0 and coursera0, there were 20 feature. 4 out of these 20 features have missing (NA).   
+We may use K-nearest neighbor to impute missing data (the results will be standardized). However, because only 406 out of 19622 records have non-missing data for these four features in traininga, and these 4 features have no non-missing data at all in the testinga data. Therefore, simply deleting these four features is the best choice.
+```{r}
+data2<-data1[,-c(2,7,12,17)]
+coursera2<-coursera1[,-c(2,7,12,17)]
+```
+
+3. Data partition to training and testing
+```{r}
+library("caret")
+inTrain = createDataPartition(data2$classe, p = 3/4)[[1]]
+training = data2[ inTrain,]
+testing = data2[-inTrain,]
+
+```
+
+### Build model
+1. Choice of models:   
+With labels, this project need supervised learning. The label in this project is five categories of activities (A, B, C, D, and D). Therefore, this project need classification rather than regression algorithms. Random forest might perform well for this data, with relatively good accuracy (low bias), low variance, and appreciable interpretability.
+2. Cross-validation:  
+Random forest is an ensembling learning method and resampling could be used to adjust tuning parameters. Cross-validation is used here to find the best mtry parameter in random forest.
+
+```{r}
+set.seed(33833)
+mod1<-train(classe ~.,method="rf", data=training, trControl = trainControl(method="cv"),number=3)
+
+pred1<-predict(mod1, testing)
+confusionMatrix(pred1, testing$classe)
+```
+Using this seed, we got a final prediction algorithm with an accuracy of 94.15%.
+
+### Apply to coursera exam
+```{r}
+pred1<-predict(mod1, coursera2)
+results<-data.frame(id=coursera0$problem_id, pred1)
+results
+```
+
+### Reference  
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
